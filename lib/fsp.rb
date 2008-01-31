@@ -41,7 +41,7 @@
 # - Introduces params :sort_key and :sort_order.
 #
 class FSP
-  attr_accessor :filter, :filters, :page, :page_size, :count, :tag
+  attr_accessor :filter, :filters, :page, :page_size, :count, :tag, :conditions
   attr_reader :name, :sort
   
   def initialize(name, options = {})
@@ -54,6 +54,7 @@ class FSP
     @default_table = options[:default_table]
     @page = options[:page]
     @page_size = options[:page_size]
+    @conditions = []
   end
   
   def initialize_copy(from)
@@ -74,15 +75,10 @@ class FSP
     @filters[@filter % @filters.size]
   end
 
-  def field_clause
-    nil
-  end
-  
   def conditions_clause
-    cc = []
+    cc = @conditions.dup
     cc << filter_clause
-    cc << field_clause
-    cc.compact * ' AND '
+    cc.compact.map{|c| ActiveRecord::Base.send(:sanitize_sql_for_conditions, c)} * ' AND '
   end
 
   # Returns an SQL sort clause corresponding to the current sort state.
