@@ -167,7 +167,7 @@ class FSP
 
   def count_options
     returning({}) do |co|
-      co[:conditions] = conditions_clause if conditions_clause
+      co[:conditions] = conditions_clause unless conditions_clause.empty?
       co[:tagged_with] = tag if tag
     end
   end
