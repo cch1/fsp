@@ -3,7 +3,7 @@
 #          Inspiration: sort_helper.rb written by Rackham, Conway and Cavaliere
 #             will_paginate plugin @ svn://errtheblog.com/svn/plugins/will_paginate
 # Apr 2007: Major rewrite to better support pagination and encapsulate state and some behavior in FSP class.
-# Jan 2008: Added support for managing tag-based searching. 
+# Jan 2008: Added support for managing tag-based searching and exposed conditions array for storing all conditions fragments (filters, etc.) 
 # License: This source code is released under the MIT license.
 #
 # - Consecutive clicks toggle the column's sort order.
@@ -41,72 +41,106 @@
 # - Introduces params :sort_key and :sort_order.
 #
 class FSP
-  attr_accessor :filter, :filters, :page, :page_size, :count, :tag, :conditions
-  attr_reader :name, :sort
-  
-  def initialize(name, options = {})
-    @name = name
-    options = {:filters => [nil], :filter => 0, :key => 'id', :order => 'asc', :page => 1, :page_size => 10}.update(options)    
-    @filter = options[:filter]
-    @filters = options[:filters]
-    @sort = [options[:key], options[:order]]
-    @previous_sort = @sort
-    @default_table = options[:default_table]
-    @page = options[:page]
-    @page_size = options[:page_size]
-    @conditions = []
+  class Sort
+    attr_reader :table, :column
+    
+    def initialize(string, default_table = nil)
+      md = /((\w*)[.])?(\w+)/.match(string)
+      @table = md[2] || default_table
+      @column = md[3].downcase
+      @default_table = md[2].nil?
+      @ascending = ('a'..'z').include?(md[3].first)
+    end
+    
+    def ascending?
+      @ascending
+    end
+    
+    def toggle_order
+      @ascending = !@ascending
+    end
+
+    # Build the minimal-length string representing the sort.
+    def to_s
+      t = @default_table ? "" : "#{table}."
+      c = column.dup
+      ascending? ? c.downcase! : c.upcase!
+      t + c
+    end
+    
+    def to_sql
+      %{#{table}.#{column} #{ascending? ? 'ASC' : 'DESC'}}
+    end
+    
+    def description(column_alias = nil)
+      "Sort #{ascending? ? 'ascending' : 'descending'} by " + (column_alias || Inflector::humanize(column))
+    end
   end
   
+  attr_accessor :filter, :sorts, :page, :page_size   # Dynamic state variables
+  attr_accessor :count, :tag, :conditions
+  attr_reader :name
+  
+  def initialize(resource, options = {})
+    @resource = resource
+    @name = @resource.to_s
+    options = options.dup.reverse_merge!({:filters => [], :filter => 0, :sorts => @resource.primary_key, :page => 1, :page_size => 10})    
+    @default_table = options.delete(:default_table) || @resource.table_name
+    @filters = options.delete(:filters)
+    self.conditions = []
+    self.state = options
+  end
+
+  # Convert state to hash.
+  # TODO: Consider persisting only a subset of the state values. 
+  def state
+    {:filter => filter, :sorts => sorts.join(':'), :page => page, :page_size => page_size}
+  end
+  alias get_params state
+
+  # Load dynamic state from hash of state values.
+  def state=(h)
+    self.filter = h[:filter].to_i if h[:filter]
+    self.sorts = h[:sorts].scan(/[^:]+/).map{|s| Sort.new(s, @default_table)} if h[:sorts]
+    self.page = h[:page].to_i if h[:page]
+    self.page_size = h[:page_size].to_i if h[:page_size]
+  end
+  
+  # Used when duplicating an object to ensure deep state variables are also duplicated and not just referenced.
   def initialize_copy(from)
     super
-    @sort = from.instance_variable_get(:@sort).dup
-    @previous_sort = from.instance_variable_get(:@previous_sort).dup
     @filters = from.instance_variable_get(:@filters).dup
+    @sorts = from.instance_variable_get(:@sorts).dup
   end
   
-  def sort=(s)
-    @previous_sort = @sort
-    @sort = s
-  end
-    
   # Returns a SQL where clause corresponding to the current filter state.
   # Use this as :conditions for a find clause, for example.
   def filter_clause
-    @filters[@filter % @filters.size]
+    @filters[filter % @filters.size]
   end
 
   def conditions_clause
-    cc = @conditions.dup
+    cc = conditions.dup
     cc << filter_clause
-    cc.compact.map{|c| ActiveRecord::Base.send(:sanitize_sql_for_conditions, c)} * ' AND '
+    cc.compact.map{|c| @resource.send(:sanitize_sql_for_conditions, c)} * ' AND '
   end
-
+  
   # Returns an SQL sort clause corresponding to the current sort state.
   # Use this as :order for a find clause, for example.
   def sort_clause
-    if @sort[0] =~ /\./
-      sc = %{#{@sort[0]} #{@sort[1]}}
-    else
-      sc = %{#{@default_table}.#{@sort[0]} #{@sort[1]}}
-    end
-    if @previous_sort
-      if @previous_sort[0] =~ /\./
-        sc += %{, #{@previous_sort[0]} #{@previous_sort[1]}}
-      else
-        sc += %{, #{@default_table}.#{@previous_sort[0]} #{@previous_sort[1]}}
-      end
-    end
-    sc
+    self.sorts.map(&:to_sql) * ', '
   end
   
   def toggle_sort_order
-    @sort[1] = (@sort[1].downcase == 'asc' ? 'desc' : 'asc')
+    self.sorts.first.toggle_order
     self.page = 1
     self
   end
   
-  def change_sort(key, order = 'asc')
-    self.sort = [key, order]
+  def change_sort(str)
+    ns = Sort.new(str, @default_table)
+    self.sorts.delete_if{|s| s.column == ns.column}  # Remove duplicates of column
+    self.sorts.unshift(ns).slice!(2) # Retain last three unique sorts
     self.page = 1
     self
   end
@@ -116,8 +150,9 @@ class FSP
     self
   end
   
+  # Advance to the next filter.
   def next_filter
-    self.filter = (filter + 1).modulo(self.filters.size)
+    self.filter = (filter + 1).modulo(@filters.size)
     self.page = 1
     self
   end
@@ -136,18 +171,19 @@ class FSP
     c ? "Show where " + c : "Show all"
   end
   
+  # Return the filename of an icon representing the sort effect of selecting the given column
   def sort_icon(column)
-    return 'sort_none.png' unless sort.first == column
-    if sort[1].downcase == 'asc'
-      icon = 'sort_asc.png'
+    return 'sort_none.png' unless sorts.first.column == column
+    if sorts.first.ascending?
+      'sort_desc.png'
     else
-      icon = 'sort_desc.png'
+      'sort_asc.png'
     end
   end
   
+  # Return a string describing the current sort with an optional alias for the column name
   def sort_description(name = nil)
-    order = (self.sort.last == 'asc' ? 'ascending' : 'descending')
-    "Sort #{order} by " + name || Inflector::humanize(self.sort.first)
+    sorts.first.description(name)
   end
   
   def page_count
@@ -155,10 +191,10 @@ class FSP
   end
   
   def find_options
-    options = count_options
-    options.merge!({:order => sort_clause}) if sort_clause
-    options.merge!({:offset => (page - 1)*page_size, :limit => page_size}) unless page_size.zero?
-    options
+    returning(count_options) do |fo|
+      fo.merge!({:order => sort_clause}) unless sort_clause.empty?
+      fo.merge!({:offset => (page - 1)*page_size, :limit => page_size}) unless page_size.zero?
+    end
   end
 
   def count_options
@@ -167,23 +203,16 @@ class FSP
       co[:tagged_with] = tag if tag
     end
   end
-  
-  def get_params
-    {:filter => @filter, :key => @sort.first, :order => @sort.last, :page => page, :page_size => page_size}
-  end
 end
 
-def fsp_init(p, options = {})
-  name = options[:name] || self.class.to_s.underscore
-  fsp = session[name + '_fsp'] || FSP.new(name, options)
-  fsp.filters = options[:filters] if options[:filters]
-  fsp.filter = p[:filter].to_i
-  fsp.sort = [p[:key], p[:order] || 'asc'] if p[:key]
-  fsp.page = (p[:page] || 1).to_i
-  fsp.page_size = p[:page_size].to_i if p[:page_size]
-  fsp.tag = p[:tag]
-  session[name + '_fsp'] = fsp
-  fsp
+def fsp_init(resource, p, options = {})
+  returning FSP.new(resource, options) do |fsp|
+    fsp.state = session[fsp.name + '_fsp'] || {}
+    pstate = p.inject({}) {|m, (k,v)| m[k.to_sym] = v if %w(filter sorts page page_size).include?(k);m}
+    fsp.state = pstate
+    fsp.tag = p[:tag]
+    session[fsp.name + '_fsp'] = fsp.state
+  end
 end
 
 module FSPHelper
@@ -193,12 +222,12 @@ module FSPHelper
   # - The optional caption explicitly specifies the displayed link text.
   # - A sort icon image is positioned to the left of the sort caption.
   def sort_link(fsp, column, options = {})
-    if fsp.sort.first == column
+    if fsp.sorts.first == column
       fsp_new = fsp.dup.toggle_sort_order
     else
-      fsp_new = fsp.dup.change_sort(column, options[:order] || 'asc')
+      fsp_new = fsp.dup.change_sort(column)
     end
-    icon = image_path(fsp_new.sort_icon(fsp.sort.first))
+    icon = image_path(fsp_new.sort_icon(fsp.sorts.first))
     caption = options.delete(:caption) || Inflector::humanize(column)
     html_options = {:title => fsp_new.sort_description(caption)}
     link_to(image_tag(icon, :class => 'fs_sort') + '&nbsp;' + caption, {:overwrite_params => fsp_new.get_params}, html_options)
