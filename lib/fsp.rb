@@ -1,4 +1,4 @@
-# Helper to filter, sort and paginate tables.
+# Support for filtering, sorting and paginating views.
 # Author:  Chris Hapgood <cch1@hapgoods.com> July 2006
 #          Inspiration: sort_helper.rb written by Rackham, Conway and Cavaliere
 #             will_paginate plugin @ svn://errtheblog.com/svn/plugins/will_paginate
@@ -7,10 +7,8 @@
 # License: This source code is released under the MIT license.
 #
 # - Consecutive clicks toggle the column's sort order.
-# - Sort/Filter state is maintained by a session hash entry.
+# - State is available as a small hash (for storage in session or URL parameters).
 # - Icons identify sort column and state as well as filter state.
-# - Typically used in conjunction with the Pagination module, but the sort_clause and filter_clause methods
-#   can stand alone for external use.
 #
 # Example code snippets:
 #
@@ -19,9 +17,9 @@
 #   helper :filter_sort
 #   include FilterSortHelper
 # 
-#   def list
-#     @fsp = fsp('title', 'asc', ["roles.name = 'owner'", "roles.name <> 'owner'", nil], nil, 'playlists', true)
-#     @playlist_pages, @playlists = paginate :playlists, :order_by => sort_clause, :conditions => filter_clause, :per_page => 10
+#   def index
+#     @fsp = fsp_init(Playlist, {:sorts => 'title', :conditions => ["roles.name = 'owner'", "roles.name <> 'owner'", nil]})
+#     ...
 #   end
 # 
 # View (table header in list.rhtml):
@@ -113,12 +111,14 @@ class FSP
     @sorts = from.instance_variable_get(:@sorts).dup
   end
   
-  # Returns a SQL where clause corresponding to the current filter state.
-  # Use this as :conditions for a find clause, for example.
+  # Returns the Rails condition corresponding to the current filter.  Filters can be any
+  # one of the supported Rails conditions (string, hash or array). 
   def filter_clause
-    @filters[filter % @filters.size]
+    @filters[filter % @filters.size] unless @filters.size.zero?
   end
 
+  # Returns a sanitized SQL WHERE clause corresponding to the current filter
+  # state and any conditions.  Use as :conditions for find or count, for example.
   def conditions_clause
     cc = conditions.dup
     cc << filter_clause
@@ -137,6 +137,7 @@ class FSP
     self
   end
   
+  # Update the sort with the provided sort string.
   def change_sort(str)
     ns = Sort.new(str, @default_table)
     self.sorts.delete_if{|s| s.column == ns.column}  # Remove duplicates of column
@@ -145,18 +146,22 @@ class FSP
     self
   end
   
+  # Change the current page.
   def change_page(p)
     self.page = p
     self
   end
   
-  # Advance to the next filter.
+  # Advance to the next filter.  If there are no filters, or only one filter, there is no state change.
   def next_filter
-    self.filter = (filter + 1).modulo(@filters.size)
-    self.page = 1
+    unless @filters.size < 2
+      self.filter = (filter + 1).modulo(@filters.size)
+      self.page = 1
+    end
     self
   end
   
+  # Return the filename for an icon representing the current filter state.
   def filter_icon
     fn = self.name + '_' + self.filter.to_s + '.png'
     fn = 'filter_' + self.filter.to_s + '.png' unless File.file?('public/images/' + fn)
@@ -165,10 +170,11 @@ class FSP
     fn
   end
   
+  # Return a description of the current filter (not including any conditions).
+  # FIXME: This will return something ugly for non-string filters.
   def filter_description
     c = self.filter_clause
-    c = c[0] if c.is_a?(Array)
-    c ? "Show where " + c : "Show all"
+    c ? "Show where #{c}" : "Show all"
   end
   
   # Return the filename of an icon representing the sort effect of selecting the given column
@@ -186,10 +192,12 @@ class FSP
     sorts.first.description(name)
   end
   
+  # Return the number of pages in the current resource.
   def page_count
     page_size.zero? ? 1 : (count.to_f / page_size).ceil
   end
   
+  # Return a hash of options suitable for ActiveRecord::Base#find.
   def find_options
     returning(count_options) do |fo|
       fo.merge!({:order => sort_clause}) unless sort_clause.empty?
@@ -197,6 +205,7 @@ class FSP
     end
   end
 
+  # Return a hash of options suitable for ActiveRecord::Base#count.
   def count_options
     returning({}) do |co|
       co[:conditions] = conditions_clause unless conditions_clause.empty?
