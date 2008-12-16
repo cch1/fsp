@@ -11,7 +11,7 @@ module FSPHelper
       fsp_new = fsp.dup.change_sort(column)
     end
     icon = image_path(fsp_new.sort_icon(fsp.sorts.first))
-    caption = options.delete(:caption) || Inflector::humanize(column)
+    caption = options.delete(:caption) || column.humanize
     html_options = {:title => fsp_new.sort_description(caption)}
     link_to(image_tag(icon, :class => 'fs_sort') + '&nbsp;' + caption, {:overwrite_params => fsp_new.get_params}, html_options)
   end
