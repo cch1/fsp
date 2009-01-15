@@ -87,7 +87,6 @@ class FSP
   end
 
   # Convert state to hash.
-  # TODO: Consider persisting only a subset of the state values. 
   def state
     {:filter => filter, :sorts => sorts.join(':'), :page => page, :page_size => page_size}
   end
@@ -211,12 +210,16 @@ class FSP
   end
 end
 
+# Return a new FSP object that adapts to persisted state and parameters, then persist merged new state.
 def fsp_init(resource, p, options = {})
   returning FSP.new(resource, options) do |fsp|
-    fsp.state = session[fsp.name + '_fsp'] || {}
-    pstate = p.inject({}) {|m, (k,v)| m[k.to_sym] = v if %w(filter sorts page page_size).include?(k);m}
-    fsp.state = pstate
+    key = fsp.name + '_fsp'
+    pstate = session[key] || {} # Recover the persisted state
+    state = p.inject(pstate) {|m, (k,v)| m[k.to_sym] = v if %w(filter sorts page page_size).include?(k);m} # Merge persisted state and parameters
+    fsp.state = state
     fsp.tag = p[:tag]
-    session[fsp.name + '_fsp'] = fsp.state
+    # Don't persist state entries that fail across contexts that share a key,
+    # such as a 'resource' with multiple scopes (e.g. Widgets, account.widgets)
+    session[key] = fsp.state.delete(:page)
   end
 end
