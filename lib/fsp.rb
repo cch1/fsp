@@ -220,6 +220,6 @@ def fsp_init(resource, p, options = {})
     fsp.tag = p[:tag]
     # Don't persist state entries that fail across contexts that share a key,
     # such as a 'resource' with multiple scopes (e.g. Widgets, account.widgets)
-    session[key] = fsp.state.delete(:page)
+    session[key] = fsp.state.delete_if{|k,v| %w(page).include?(k.to_s)}
   end
 end
