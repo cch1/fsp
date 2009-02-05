@@ -13,7 +13,7 @@ module FSPHelper
     icon = image_path(fsp_new.sort_icon(fsp.sorts.first))
     caption = options.delete(:caption) || column.humanize
     html_options = {:title => fsp_new.sort_description(caption)}
-    link_to(image_tag(icon, :class => 'fs_sort') + '&nbsp;' + caption, {:overwrite_params => fsp_new.get_params}, html_options)
+    link_to(image_tag(icon, :class => 'fs_sort') + '&nbsp;' + caption, self.send(fsp_new.url_writer, fsp_new.get_params), html_options)
   end
 
   # Returns a table header <th> tag with a sort link for the named column
@@ -47,7 +47,7 @@ module FSPHelper
     fsp_new = fsp.dup.next_filter
     icon = image_path(fsp.filter_icon)
     html_options = {:title => options[:title] || fsp_new.filter_description}
-    link_to(image_tag(icon, :id => 'fs_toggle'), {:overwrite_params => fsp_new.get_params}, html_options)
+    link_to(image_tag(icon, :id => 'fs_toggle'), self.send(fsp_new.url_writer, fsp_new.get_params), html_options)
   end
   
   def pagination_links(fsp, options = {})
@@ -70,7 +70,7 @@ module FSPHelper
       visible = [current, beginning, tail].map(&:to_a).sum
   
       def link_or_span(fsp, current, span_class = nil, text = fsp.page.to_s)
-        current ? content_tag(:span, text, :class => span_class) : link_to(text, {:overwrite_params => fsp.get_params})
+        current ? content_tag(:span, text, :class => span_class) : link_to(text, self.send(fsp.url_writer, fsp.get_params))
       end
       
       # build the list of the links
