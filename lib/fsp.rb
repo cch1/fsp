@@ -5,6 +5,7 @@
 # Apr 2007: Major rewrite to better support pagination and encapsulate state and some behavior in FSP class.
 # Jan 2008: Added support for managing tag-based searching and exposed conditions array for storing all conditions fragments (filters, etc.) 
 # License: This source code is released under the MIT license.
+# Feb 2009: Added support for Sort#match? to fix bug when sort column is a <table>.<column> expression.
 #
 # - Consecutive clicks toggle the column's sort order.
 # - State is available as a small hash (for storage in session or URL parameters).
@@ -27,51 +28,69 @@
 #   <thead>
 #     <tr>
 #       <%= sort_header_tag('id', :title => 'Sort by contact ID') %>
-#       <%= sort_header_tag('last_name', :caption => 'Name') %>
+#       <%= sort_header_tag('Last_name', :caption => 'Name') %>
 #       <%= sort_header_tag('phone') %>
-#       <%= sort_header_tag('address', :width => 200) %>
+#       <%= sort_header_tag('address.street', :width => 200) %>
 #     </tr>
 #   </thead>
 #
 # - The ascending and descending sort icon images are sort_asc.png and
 #   sort_desc.png and reside in the application's images directory.
 class FSP
+  # The Sort class is a string-like class that manages one column of a sort state (which can be made up
+  # of several ordered columns).  Managed state includes the table and column names (as used by
+  # ActiveRecord) and the order (ascending/descending).  A Sort instance is initialized with a string
+  # value in SQL form, i.e. "<table>.<column>".  The table is optional -if it is not provided then the
+  # default_table parameter is used to determine the column's table.  The case of the column name's
+  # first character determines the order of the sort.
   class Sort
     attr_reader :table, :column
     
+    SPEC = /((\w*)[.])?(\w+)/
+
     def initialize(string, default_table = nil)
-      md = /((\w*)[.])?(\w+)/.match(string)
+      md = SPEC.match(string)
       @table = md[2] || default_table
       @column = md[3].downcase
       @default_table = md[2].nil?
       @ascending = ('a'..'z').include?(md[3].first)
     end
-    
+
     def ascending?
       @ascending
     end
-    
+
     def toggle_order
       @ascending = !@ascending
+    end
+    
+    # Does the given string match this Sort's specification?  
+    def match?(string_spec, order_aware = false)
+      md = SPEC.match(string_spec)
+      t = (table == md[2]) || (!md[2] && @default_table)
+      c = (column == md[3].downcase)
+      o = !order_aware || (ascending? && ('a'..'z').include?(md[3].first))
+      t && c && o
     end
 
     # Build the minimal-length string representing the sort.
     def to_s
       t = @default_table ? "" : "#{table}."
-      c = column.dup
-      ascending? ? c.downcase! : c.upcase!
+      c = ascending? ? column.downcase : column.upcase
       t + c
+    rescue
+      "?????"
     end
-    
+
     def to_sql
       %{#{table}.#{column} #{ascending? ? 'ASC' : 'DESC'}}
     end
-    
+
     def description(column_alias = nil)
       "Sort #{ascending? ? 'ascending' : 'descending'} by " + (column_alias || Inflector::humanize(column))
     end
   end
-  
+
   attr_accessor :filter, :sorts, :page, :page_size   # Dynamic state variables
   attr_accessor :count, :tag, :conditions
   attr_reader :name, :url_writer

@@ -1,26 +1,25 @@
 module FSPHelper
-  # Returns a link which sorts by the named column.
+  # Returns a link which sorts by the given sort spec.
   #
-  # - column is the name of an attribute in the sorted record collection.
+  # - spec is the specification of a column in the sorted record collection.  See FSP::Sort
   # - The optional caption explicitly specifies the displayed link text.
   # - A sort icon image is positioned to the left of the sort caption.
-  def sort_link(fsp, column, options = {})
-    if fsp.sorts.first.column == column
+  def sort_link(fsp, spec, options = {})
+    if fsp.sorts.first.match?(spec, false)
       fsp_new = fsp.dup.toggle_sort_order
     else
-      fsp_new = fsp.dup.change_sort(column)
+      fsp_new = fsp.dup.change_sort(spec)
     end
     icon = image_path(fsp_new.sort_icon(fsp.sorts.first))
-    caption = options.delete(:caption) || column.humanize
+    caption = options.delete(:caption) || spec.humanize
     html_options = {:title => fsp_new.sort_description(caption)}
     link_to(image_tag(icon, :class => 'fs_sort') + '&nbsp;' + caption, self.send(fsp_new.url_writer, fsp_new.get_params), html_options)
   end
 
-  # Returns a table header <th> tag with a sort link for the named column
-  # attribute.
+  # Returns a table header <th> tag with a sort link for the given sort spec.
   #
   # Options:
-  #   :caption     The displayed link name (defaults to titleized column name).
+  #   :caption     The displayed link name (defaults to titleized spec).
   #   :title       The tag's 'title' attribute (defaults to 'Sort by :caption').
   #
   # Other options hash entries generate additional table header tag attributes.
@@ -35,8 +34,8 @@ module FSPHelper
   #     <a href="/contact/list?sort_order=desc&amp;sort_key=id">Id</a>
   #     &nbsp;&nbsp;<img alt="Sort_asc" src="/images/sort_asc.png" />
   #   </th>
-  def sort_header_tag(fsp, column, options = {})
-    content_tag('th', sort_link(fsp, column, options))
+  def sort_header_tag(fsp, spec, options = {})
+    content_tag('th', sort_link(fsp, spec, options))
   end
 
   # Returns a graphical link which toggles the filter.
