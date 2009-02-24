@@ -5,6 +5,7 @@ module FSPHelper
   # - The optional caption explicitly specifies the displayed link text.
   # - A sort icon image is positioned to the left of the sort caption.
   def sort_link(fsp, spec, options = {})
+    spec = spec.to_s
     if fsp.sorts.first.match?(spec, false)
       fsp_new = fsp.dup.toggle_sort_order
     else
