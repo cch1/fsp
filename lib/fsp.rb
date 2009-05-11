@@ -91,6 +91,8 @@ class FSP
     end
   end
 
+  cattr_accessor :default_options
+  self.default_options = {:filters => [], :filter => 0, :sorts => 'id', :page => 1, :page_size => 10}
   attr_accessor :filter, :sorts, :page, :page_size   # Dynamic state variables
   attr_accessor :count, :tag, :conditions
   attr_reader :name, :url_writer
@@ -98,7 +100,7 @@ class FSP
   def initialize(resource, options = {})
     @resource = resource
     @name = @resource.to_s
-    options = options.dup.reverse_merge!({:filters => [], :filter => 0, :sorts => @resource.primary_key, :page => 1, :page_size => 10})    
+    options = options.dup.reverse_merge!(default_options)    
     @default_table = options.delete(:default_table) || @resource.table_name
     @filters = options.delete(:filters)
     @url_writer = options.delete(:url_writer) || :url_for
