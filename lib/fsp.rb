@@ -126,7 +126,7 @@ class FSP
   def initialize_copy(from)
     super
     @filters = from.instance_variable_get(:@filters).dup
-    @sorts = from.instance_variable_get(:@sorts).dup
+    @sorts = from.instance_variable_get(:@sorts).map{|e| e.dup}
   end
   
   # Returns the Rails condition corresponding to the current filter.  Filters can be any
