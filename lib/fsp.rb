@@ -94,14 +94,15 @@ class FSP
   cattr_accessor :default_options
   self.default_options = {:filters => [], :filter => 0, :sorts => 'id', :page => 1, :page_size => 10}
   attr_accessor :filter, :sorts, :page, :page_size   # Dynamic state variables
-  attr_accessor :count, :tag, :conditions
-  attr_reader :name, :url_writer
+  attr_accessor :count, :conditions
+  attr_reader :name, :url_writer, :query_options
   
   def initialize(resource, options = {})
     @resource = resource
     @name = @resource.to_s
     options = options.dup.reverse_merge!(default_options)    
     @default_table = options.delete(:default_table) || @resource.table_name
+    @query_options = options.delete(:query_options) || {}
     @filters = options.delete(:filters)
     @url_writer = options.delete(:url_writer) || :url_for
     self.conditions = []
@@ -218,16 +219,15 @@ class FSP
   # Return a hash of options suitable for ActiveRecord::Base#find.
   def find_options
     returning(count_options) do |fo|
-      fo.merge!({:order => sort_clause}) unless sort_clause.empty?
+      fo[:order] = sort_clause unless sort_clause.empty?
       fo.merge!({:offset => (page - 1)*page_size, :limit => page_size}) unless page_size.zero?
     end
   end
 
   # Return a hash of options suitable for ActiveRecord::Base#count.
   def count_options
-    returning({}) do |co|
+    returning(query_options.dup) do |co|
       co[:conditions] = conditions_clause unless conditions_clause.empty?
-      co[:tagged_with] = tag if tag
     end
   end
 end
@@ -239,7 +239,6 @@ def fsp_init(resource, p, options = {})
     pstate = session[key] || {} # Recover the persisted state
     state = p.inject(pstate) {|m, (k,v)| m[k.to_sym] = v if %w(filter sorts page page_size).include?(k);m} # Merge persisted state and parameters
     fsp.state = state
-    fsp.tag = p[:tag]
     # Don't persist state entries that fail across contexts that share a key,
     # such as a 'resource' with multiple scopes (e.g. Widgets, account.widgets)
     session[key] = fsp.state.delete_if{|k,v| %w(page).include?(k.to_s)}
