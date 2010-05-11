@@ -1,3 +1,3 @@
 # Include hook code here
-require 'fsp'
-ActionView::Base.send :include, FSPHelper
+ActionView::Base.send :include, FSP::Helper
+ActionController::Base.send :include, FSP::ControllerMethods
