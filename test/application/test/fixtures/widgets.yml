@@ -1,0 +1,24 @@
+primo:
+  foo: 0
+  bar: 99
+  baz: un
+secondo:
+  foo: 1
+  bar: 98
+  baz: deux
+mezzo1:
+  foo: 50
+  bar: 50
+  baz: cinquante 
+mezzo2:
+  foo: 50
+  bar: 50
+  baz: cinquante 
+penultimo:
+  foo: 98
+  bar: 1
+  baz: quatre-vingt dix huit
+ultimo:
+  foo: 99
+  bar: 0
+  baz: quatre-vingt dix neuf
