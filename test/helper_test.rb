@@ -1,7 +1,7 @@
 require File.expand_path(File.dirname(__FILE__) + "/application/test/test_helper.rb")
 
 class HelperTest < ActionView::TestCase
-  
+
   tests FSP::Helper
 
   def setup
