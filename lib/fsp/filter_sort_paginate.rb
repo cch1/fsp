@@ -92,7 +92,7 @@ module FSP
 
     # Set the primary sort column to the named column.  If it is already the primary sort key, toggle the sort order
     def change_sort(column_name)
-      if sorter.first.match?(column_name)
+      if sorter.any? && sorter.first.match?(column_name)
         sorter.toggle_order
       else
         sorter.push(column_name)
