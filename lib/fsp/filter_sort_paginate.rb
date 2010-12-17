@@ -154,15 +154,15 @@ module FSP
 
     # Return a hash of options suitable for ActiveRecord::Base#find.
     def find_options
-      returning(count_options) do |fo|
-        fo[:order] = sorter.to_find_option
+      count_options.tap do |fo|
+        fo[:order] = sorter.to_find_option if sorter.to_find_option
         fo.merge!({:offset => (page - 1)*page_size, :limit => page_size}) unless page_size.zero?
       end
     end
 
     # Return a hash of options suitable for ActiveRecord::Base#count.
     def count_options
-      returning(query_options.dup) do |co|
+      query_options.dup.tap do |co|
         co[:conditions] = conditions_clause unless conditions_clause.empty?
       end
     end

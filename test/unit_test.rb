@@ -12,7 +12,7 @@ class UnitTest < ActiveSupport::TestCase
     fsp = FSP::FilterSortPaginate.new(Widget, params.merge({:url_writer => :widgets_path}))
     assert_nil fsp.find_options[:order]
   end
-  
+
   test 'should add column when unsorted' do
     fsp = FSP::FilterSortPaginate.new(Widget, {})
     assert_equal "foo", fsp.change_sort("foo").get_params[:sorts]
