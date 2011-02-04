@@ -15,7 +15,7 @@ module FSP
   module ControllerMethods
     # Return a new FSP object that adapts to persisted state and parameters, then persist merged new state.
     def fsp_init(resource, p, options = {})
-      returning FSP::FilterSortPaginate.new(resource, options) do |fsp|
+      FSP::FilterSortPaginate.new(resource, options).tap do |fsp|
         fsp.state = p.inject({}) {|m, (k,v)| m[k.to_sym] = v if %w(filter sorts page page_size).include?(k);m} # Merge persisted state and parameters
       end
     end
